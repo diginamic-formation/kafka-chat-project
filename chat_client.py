@@ -33,14 +33,12 @@ def read_messages(consumer):
 def cmd_msg(producer, channel, message_content, nick):
     if channel:
         topic = BASE_TOPIC_NAME + channel[1:]
-        producer.send(topic,str((message_content,nick)).encode('utf-8'))
+        producer.send(topic, str((message_content, nick)).encode('utf-8'))
     else:
         print("Vous n'etes pas connecte")
 
 
-
-def cmd_join(consumer, producer, line):
-    canal_name = line
+def cmd_join(consumer, producer, canal_name):
     if is_valid_canal_name(canal_name):
         topic = "chat_channel_" + canal_name[1:]
         print("Je m'abonne à : ", topic)
@@ -56,9 +54,28 @@ def cmd_join(consumer, producer, line):
         print("%s est un nom de canal invalide " % canal_name)
         return False
 
-def cmd_part(consumer, producer, line):
-    # TODO À compléter
-    pass
+
+def cmd_part(consumer, producer, channel_name, channel_list, curchan):
+    topic_name = BASE_TOPIC_NAME + channel_name[1:]
+    # cas le nom existe dans la liste
+    if len(channel_list) > 0 and channel_name in channel_list:
+        # effacer le canal de la liste
+        channel_list.remove(channel_name)
+        # le nom existe et c'est le seul
+        if len(channel_list) == 0:
+            consumer.unsubscribe()
+            curchan = None
+        else:
+            # on enleve le topic des abonnements
+            consumer.subscription().remove(topic_name)
+            consumer.subscribe(consumer.subscription())
+            # si le current qui a été retiré, on le rempla par le premier de la liste
+            if channel_name == curchan:
+                curchan = channel_list[0]
+    else:
+        print("%s n'existe pas dans la liste des canaux" % channel_name)
+
+    return curchan
 
 
 def cmd_quit(producer, line):
@@ -66,9 +83,25 @@ def cmd_quit(producer, line):
     pass
 
 
+def cmd_active(consumer, producer, channel_name, channel_list):
+    if len(channel_list) > 0 and channel_name in channel_list:
+        return True
+    else:
+        print("%s n'existe pas dans tes abonnements " % channel_name)
+        return False
+
+
+def cmd_list(channel_list):
+    if len(channel_list) > 0:
+        for name in channel_list:
+            print(name)
+    else:
+        print("Votre liste d'abonnements est vide")
+
+
 def main_loop(nick, consumer, producer):
     curchan = None
-    topic_list = []
+    channel_list = []
     while True:
         try:
             if curchan is None:
@@ -92,13 +125,18 @@ def main_loop(nick, consumer, producer):
         elif cmd == "join":
             if cmd_join(consumer, producer, args):
                 curchan = args
+                channel_list.append(curchan)
         elif cmd == "part":
-            cmd_part(consumer, producer, args)
+            curchan = cmd_part(consumer, producer, args, channel_list, curchan)
+        elif cmd == "active":
+            if cmd_active(consumer, producer, args, channel_list):
+                curchan = args
+        elif cmd == "list":
+            cmd_list(channel_list)
         elif cmd == "quit":
             cmd_quit(producer, args)
             break
         # TODO: rajouter des commandes ici
-
 
 
 def main():
