@@ -38,36 +38,39 @@ def cmd_msg(producer, channel, message_content, nick):
         print("Vous n'etes pas connecte")
 
 
-def cmd_join(consumer, producer, canal_name):
+def cmd_join(consumer, producer, canal_name, pseudo):
     if is_valid_canal_name(canal_name):
-        topic = "chat_channel_" + canal_name[1:]
+        topic = BASE_TOPIC_NAME + canal_name[1:]
         print("Je m'abonne à : ", topic)
+        producer.send(topic, str(pseudo + " has joined").encode('utf-8'))
         current_subscription = consumer.subscription()
         if current_subscription:
             current_subscription.add(topic)
             consumer.subscribe(current_subscription)
         else:
             consumer.subscribe(topic)
-        print(consumer.subscription())
+        print("Mes abonnements de topic : ",consumer.subscription())
         return True
     else:
         print("%s est un nom de canal invalide " % canal_name)
         return False
 
 
-def cmd_part(consumer, producer, channel_name, channel_list, curchan):
-    topic_name = BASE_TOPIC_NAME + channel_name[1:]
+def cmd_part(consumer, producer, channel_name, channel_list, curchan, pseudo):
+    topic = BASE_TOPIC_NAME + channel_name[1:]
     # cas le nom existe dans la liste
     if len(channel_list) > 0 and channel_name in channel_list:
         # effacer le canal de la liste
         channel_list.remove(channel_name)
+        producer.send(topic, str(pseudo + " has left").encode('utf-8'))
+
         # le nom existe et c'est le seul
         if len(channel_list) == 0:
             consumer.unsubscribe()
             curchan = None
         else:
             # on enleve le topic des abonnements
-            consumer.subscription().remove(topic_name)
+            consumer.subscription().remove(topic)
             consumer.subscribe(consumer.subscription())
             # si le current qui a été retiré, on le rempla par le premier de la liste
             if channel_name == curchan:
@@ -78,9 +81,13 @@ def cmd_part(consumer, producer, channel_name, channel_list, curchan):
     return curchan
 
 
-def cmd_quit(producer, line):
-    # TODO À compléter
-    pass
+def cmd_quit(consumer, producer, line, pseudo):
+    # recuperer tout les topics
+    topics = consumer.subscription();
+    if topics:
+        for topic in topics:
+            producer.send(topic, str(pseudo + " has left").encode('utf-8'))
+
 
 
 def cmd_active(consumer, producer, channel_name, channel_list):
@@ -115,7 +122,7 @@ def main_loop(nick, consumer, producer):
         if line.startswith("/"):
             cmd, *args = line[1:].split(" ", maxsplit=1)
             cmd = cmd.lower()
-            args = None if args == [] else args[0]
+            args = None if args == [] else args[0].strip()
         else:
             cmd = "msg"
             args = line
@@ -123,18 +130,18 @@ def main_loop(nick, consumer, producer):
         if cmd == "msg":
             cmd_msg(producer, curchan, args, nick)
         elif cmd == "join":
-            if cmd_join(consumer, producer, args):
+            if cmd_join(consumer, producer, args,nick):
                 curchan = args
                 channel_list.append(curchan)
         elif cmd == "part":
-            curchan = cmd_part(consumer, producer, args, channel_list, curchan)
+            curchan = cmd_part(consumer, producer, args, channel_list, curchan, nick)
         elif cmd == "active":
             if cmd_active(consumer, producer, args, channel_list):
                 curchan = args
         elif cmd == "list":
             cmd_list(channel_list)
         elif cmd == "quit":
-            cmd_quit(producer, args)
+            cmd_quit(consumer, producer, args,nick)
             break
         # TODO: rajouter des commandes ici
 
