@@ -9,6 +9,14 @@ from kafka import KafkaProducer, KafkaConsumer
 should_quit = False
 REGEX = "^[a-zA-Z0-9-]+$"
 
+
+def is_valid_canal_name(canal_name):
+    if canal_name.startswith("#"):
+        if re.match(REGEX, canal_name[1:]):
+            return True
+    return False
+
+
 def read_messages(consumer):
     # TODO À compléter
     while not should_quit:
@@ -21,31 +29,24 @@ def read_messages(consumer):
                 print("< %s: %s" % (channel.topic, msg.value))
 
 
-def cmd_msg(producer, channel, line):
-    # TODO À compléter
-    pass
-
-
-def is_valid_canal_name(canal_name):
-    if canal_name.startswith("#"):
-        if re.match(REGEX, canal_name[1:]) :
-            return True
-    return False
-
-
-
+def cmd_msg(producer, channel, line, nick):
+    message_content = line
+    if channel:
+        print(channel)
+        producer.send('chat_channel_test1',line.encode('UTF-8'))
+    else:
+        print("Vous n'etes pas connecte")
 
 
 
 def cmd_join(consumer, producer, line):
-
     canal_name = line
-    if is_valid_canal_name(canal_name) :
-        print("Je m'abonne à : ","chat_channel_"+canal_name[1:])
-        consumer.subscribe("chat_channel_"+canal_name[1:])
+    if is_valid_canal_name(canal_name):
+        curchan = "chat_channel_" + canal_name[1:]
+        print("Je m'abonne à : ", curchan)
+        consumer.subscribe(curchan)
     else:
         print("%s est un nom de canal invalide " % canal_name)
-
 
 
 def cmd_part(consumer, producer, line):
@@ -80,7 +81,7 @@ def main_loop(nick, consumer, producer):
             args = line
 
         if cmd == "msg":
-            cmd_msg(producer, curchan, args)
+            cmd_msg(producer, curchan, args, nick)
         elif cmd == "join":
             cmd_join(consumer, producer, args)
         elif cmd == "part":
@@ -89,6 +90,10 @@ def main_loop(nick, consumer, producer):
             cmd_quit(producer, args)
             break
         # TODO: rajouter des commandes ici
+
+        if consumer.subscription():
+            curchan = consumer.subscription()
+
 
 
 def main():
