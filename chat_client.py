@@ -8,6 +8,7 @@ from kafka import KafkaProducer, KafkaConsumer
 
 should_quit = False
 REGEX = "^[a-zA-Z0-9-]+$"
+BASE_TOPIC_NAME = "chat_channel_"
 
 
 def is_valid_canal_name(canal_name):
@@ -29,11 +30,10 @@ def read_messages(consumer):
                 print("< %s: %s" % (channel.topic, msg.value))
 
 
-def cmd_msg(producer, channel, line, nick):
-    message_content = line
+def cmd_msg(producer, channel, message_content, nick):
     if channel:
-        print(channel)
-        producer.send('chat_channel_test1',line.encode('UTF-8'))
+        topic = BASE_TOPIC_NAME + channel[1:]
+        producer.send(topic,str((message_content,nick)).encode('utf-8'))
     else:
         print("Vous n'etes pas connecte")
 
@@ -42,12 +42,19 @@ def cmd_msg(producer, channel, line, nick):
 def cmd_join(consumer, producer, line):
     canal_name = line
     if is_valid_canal_name(canal_name):
-        curchan = "chat_channel_" + canal_name[1:]
-        print("Je m'abonne à : ", curchan)
-        consumer.subscribe(curchan)
+        topic = "chat_channel_" + canal_name[1:]
+        print("Je m'abonne à : ", topic)
+        current_subscription = consumer.subscription()
+        if current_subscription:
+            current_subscription.add(topic)
+            consumer.subscribe(current_subscription)
+        else:
+            consumer.subscribe(topic)
+        print(consumer.subscription())
+        return True
     else:
         print("%s est un nom de canal invalide " % canal_name)
-
+        return False
 
 def cmd_part(consumer, producer, line):
     # TODO À compléter
@@ -61,7 +68,7 @@ def cmd_quit(producer, line):
 
 def main_loop(nick, consumer, producer):
     curchan = None
-
+    topic_list = []
     while True:
         try:
             if curchan is None:
@@ -83,16 +90,14 @@ def main_loop(nick, consumer, producer):
         if cmd == "msg":
             cmd_msg(producer, curchan, args, nick)
         elif cmd == "join":
-            cmd_join(consumer, producer, args)
+            if cmd_join(consumer, producer, args):
+                curchan = args
         elif cmd == "part":
             cmd_part(consumer, producer, args)
         elif cmd == "quit":
             cmd_quit(producer, args)
             break
         # TODO: rajouter des commandes ici
-
-        if consumer.subscription():
-            curchan = consumer.subscription()
 
 
 
