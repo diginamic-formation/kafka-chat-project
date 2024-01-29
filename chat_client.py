@@ -2,11 +2,12 @@
 
 import sys
 import threading
+import re
 
 from kafka import KafkaProducer, KafkaConsumer
 
 should_quit = False
-
+REGEX = "^[a-zA-Z0-9-]+$"
 
 def read_messages(consumer):
     # TODO À compléter
@@ -25,9 +26,26 @@ def cmd_msg(producer, channel, line):
     pass
 
 
+def is_valid_canal_name(canal_name):
+    if canal_name.startswith("#"):
+        if re.match(REGEX, canal_name[1:]) :
+            return True
+    return False
+
+
+
+
+
+
 def cmd_join(consumer, producer, line):
-    # TODO À compléter
-    pass
+
+    canal_name = line
+    if is_valid_canal_name(canal_name) :
+        print("Je m'abonne à : ","chat_channel_"+canal_name[1:])
+        consumer.subscribe("chat_channel_"+canal_name[1:])
+    else:
+        print("%s est un nom de canal invalide " % canal_name)
+
 
 
 def cmd_part(consumer, producer, line):
