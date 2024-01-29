@@ -9,6 +9,7 @@ from kafka import KafkaProducer, KafkaConsumer
 should_quit = False
 REGEX = "^[a-zA-Z0-9-]+$"
 BASE_TOPIC_NAME = "chat_channel_"
+SPARK_TOPIC_FLOOD = "chat_spark_moderation"
 
 
 def is_valid_canal_name(canal_name):
@@ -34,6 +35,8 @@ def cmd_msg(producer, channel, message_content, nick):
     if channel:
         topic = BASE_TOPIC_NAME + channel[1:]
         producer.send(topic, str((message_content, nick)).encode('utf-8'))
+        producer.send(SPARK_TOPIC_FLOOD, str((message_content, nick)).encode('utf-8'))
+
     else:
         print("Vous n'etes pas connecte")
 
@@ -49,7 +52,7 @@ def cmd_join(consumer, producer, canal_name, pseudo):
             consumer.subscribe(current_subscription)
         else:
             consumer.subscribe(topic)
-        print("Mes abonnements de topic : ",consumer.subscription())
+        print("Mes abonnements de topic : ", consumer.subscription())
         return True
     else:
         print("%s est un nom de canal invalide " % canal_name)
@@ -70,8 +73,9 @@ def cmd_part(consumer, producer, channel_name, channel_list, curchan, pseudo):
             curchan = None
         else:
             # on enleve le topic des abonnements
-            consumer.subscription().remove(topic)
-            consumer.subscribe(consumer.subscription())
+            subscriptions = consumer.subscription()
+            subscriptions.remove(topic)
+            consumer.subscribe(subscriptions)
             # si le current qui a été retiré, on le rempla par le premier de la liste
             if channel_name == curchan:
                 curchan = channel_list[0]
@@ -83,11 +87,10 @@ def cmd_part(consumer, producer, channel_name, channel_list, curchan, pseudo):
 
 def cmd_quit(consumer, producer, line, pseudo):
     # recuperer tout les topics
-    topics = consumer.subscription();
+    topics = consumer.subscription()
     if topics:
         for topic in topics:
             producer.send(topic, str(pseudo + " has left").encode('utf-8'))
-
 
 
 def cmd_active(consumer, producer, channel_name, channel_list):
@@ -130,7 +133,7 @@ def main_loop(nick, consumer, producer):
         if cmd == "msg":
             cmd_msg(producer, curchan, args, nick)
         elif cmd == "join":
-            if cmd_join(consumer, producer, args,nick):
+            if cmd_join(consumer, producer, args, nick):
                 curchan = args
                 channel_list.append(curchan)
         elif cmd == "part":
@@ -141,7 +144,7 @@ def main_loop(nick, consumer, producer):
         elif cmd == "list":
             cmd_list(channel_list)
         elif cmd == "quit":
-            cmd_quit(consumer, producer, args,nick)
+            cmd_quit(consumer, producer, args, nick)
             break
         # TODO: rajouter des commandes ici
 
