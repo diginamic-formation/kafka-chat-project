@@ -8,45 +8,50 @@ import sys
 import pyspark
 import pyspark.sql
 
+BROKER = "localhost:9092"
+TOPIC_INPUT = "chat_spark_moderation"
+TOPIC_OUTPUT = "chat_bans"
 
 
-def print_stream(df, mode="append", **options):
-    writer = df.writeStream
-    writer.outputMode(mode)
-    writer.format("console")
-    writer.options(options)
-    return writer.start()
+def print_stream(df, mode="append"):
+    return df.writeStream \
+        .outputMode(mode) \
+        .format("console") \
+        .option("truncate", "false") \
+        .start()
 
 
-def kafka_output(df, mode="append", **options):
-    writer = df.writeStream
-    writer.outputMode(mode)
-    writer.format("console")
-    writer.options(options)
-    return writer.start()
+def kafka_output(df, mode="append"):
+    return df.writeStream \
+        .outputMode(mode) \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", BROKER) \
+        .option("topic", TOPIC_OUTPUT) \
+        .start()
+
 
 def main():
     spark = pyspark.sql.SparkSession.builder.getOrCreate()
     sc = spark.sparkContext
     sc.setLogLevel("WARN")
 
-    kafkareader = spark.readStream.format("kafka")
-    kafkareader.option("kafka.bootstrap.servers", "localhost:9092")
-    kafkareader.option("subscribe", "chat_spark_moderation")
-    df = kafkareader.load()
-
-    df = df.selectExpr("CAST(key AS STRING) AS url", "CAST(value AS STRING) AS ip", "timestamp")
-    df = df.withWatermark("timestamp", "1 second")
-    print_stream(df, truncate=False)
+    df = spark.readStream.format("kafka") \
+        .option("kafka.bootstrap.servers", BROKER) \
+        .option("subscribe", TOPIC_INPUT) \
+        .load()
 
     win = pyspark.sql.functions.window("timestamp", "5 second", "1 second")
-    df = df.groupBy("url", "ip", win).agg({})
-    df = df.groupBy("url", "window").count()
-    df = df[df["count"] >= 5]
-    #df = df.sort("count", ascending=False)
+    df = df.selectExpr("CAST(key AS STRING) As pseudo", "CAST(value AS STRING) As message", "timestamp") \
+        .withWatermark("timestamp", "1 second") \
+        .groupBy("pseudo", "message", win).agg({}) \
+        .groupBy("pseudo", "window").count()
+    df = df[df["count"] > 7]
 
-    stream = print_stream(df, truncate=False, numrows=100)
+    stream = print_stream(df)
+    kafka_stream = kafka_output(df)
+
     stream.awaitTermination()
+    kafka_stream.awaitTermination()
 
 
 if __name__ == "__main__":

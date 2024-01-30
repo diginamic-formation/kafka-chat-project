@@ -19,6 +19,7 @@ def is_valid_canal_name(canal_name):
     return False
 
 
+
 def read_messages(consumer):
     # TODO À compléter
     while not should_quit:
@@ -31,11 +32,11 @@ def read_messages(consumer):
                 print("< %s: %s" % (channel.topic, msg.value))
 
 
-def cmd_msg(producer, channel, message_content, nick):
+def cmd_msg(producer, channel, message_content, pseudo):
     if channel:
         topic = BASE_TOPIC_NAME + channel[1:]
-        producer.send(topic, str((message_content, nick)).encode('utf-8'))
-        producer.send(SPARK_TOPIC_FLOOD, str((message_content, nick)).encode('utf-8'))
+        producer.send(topic, str(message_content).encode('utf-8'), pseudo.encode('utf-8'))
+        producer.send(SPARK_TOPIC_FLOOD, str(message_content).encode('utf-8'), pseudo.encode('utf-8'))
 
     else:
         print("Vous n'etes pas connecte")
